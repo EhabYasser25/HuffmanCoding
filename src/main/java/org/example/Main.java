@@ -9,12 +9,38 @@ public class Main {
     private static final int BYTE_SIZE = 8;
     private static final int LEFTMOST_BIT_MASK = 0x80;
 
+    public static class ByteArrayWrapper implements Serializable {
+        @Serial
+        private static final long serialVersionUID = 1L;
+        private final byte[] value;
+
+        ByteArrayWrapper(byte[] value) {
+            this.value = value;
+        }
+
+        byte[] getValue() {
+            return value;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof ByteArrayWrapper that)) return false;
+            return Arrays.equals(value, that.value);
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(value);
+        }
+    }
+
     static class HuffmanNode implements Comparable<HuffmanNode> {
-        byte[] value;
+        ByteArrayWrapper value;
         int frequency;
         HuffmanNode left, right;
 
-        HuffmanNode(byte[] value, int frequency) {
+        HuffmanNode(ByteArrayWrapper value, int frequency) {
             this.value = value;
             this.frequency = frequency;
         }
@@ -26,32 +52,6 @@ public class Main {
         @Override
         public int compareTo(HuffmanNode other) {
             return this.frequency - other.frequency;
-        }
-    }
-
-    public static class ByteArrayWrapper implements Serializable {
-        @Serial
-        private static final long serialVersionUID = 1L;
-        private final byte[] data;
-
-        ByteArrayWrapper(byte[] data) {
-            this.data = data;
-        }
-
-        byte[] getData() {
-            return data;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (!(o instanceof ByteArrayWrapper that)) return false;
-            return Arrays.equals(data, that.data);
-        }
-
-        @Override
-        public int hashCode() {
-            return Arrays.hashCode(data);
         }
     }
 
@@ -88,7 +88,7 @@ public class Main {
         System.out.println("Reading time " + (time2 - time1) / 1000.0 + " seconds");
 
         HuffmanNode root = buildHuffmanTree(frequencies);
-        Map<ByteArrayWrapper, String> huffmanCodes = new HashMap<>();
+        Map<Integer, String> huffmanCodes = new HashMap<>();
         long totalBitsEncoded = generateHuffmanCodes(root, huffmanCodes, "");
 
         long time3 = System.currentTimeMillis();
@@ -131,7 +131,7 @@ public class Main {
             String filePath,
             int n,
             Map<ByteArrayWrapper, Integer> frequencies,
-            Map<ByteArrayWrapper, String> huffmanCodes,
+            Map<Integer, String> huffmanCodes,
             long totalBitsEncoded) {
         try (BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(filePath + ".hc"));
              ObjectOutputStream objectOutputStream = new ObjectOutputStream(bufferedOutputStream)) {
@@ -144,7 +144,7 @@ public class Main {
         }
     }
 
-    private static void writeEncodedData(String filePath, int n, Map<ByteArrayWrapper, String> huffmanCodes, BufferedOutputStream bufferedOutputStream) throws IOException {
+    private static void writeEncodedData(String filePath, int n, Map<Integer, String> huffmanCodes, BufferedOutputStream bufferedOutputStream) throws IOException {
         try (BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(filePath))) {
             byte[] buffer = new byte[BUFFER_SIZE];
             byte[] outputBuffer = new byte[BUFFER_SIZE];
@@ -154,7 +154,7 @@ public class Main {
             while ((bytesRead = bufferedInputStream.read(buffer)) != -1) {
                 for (int i = 0; i < bytesRead; i += n) {
                     byte[] key = Arrays.copyOfRange(buffer, i, Math.min(i + n, bytesRead));
-                    String bitCode = huffmanCodes.get(new ByteArrayWrapper(key));
+                    String bitCode = huffmanCodes.get(new ByteArrayWrapper(key).hashCode());
 
                     for (int k = 0; k < bitCode.length(); k++) {
                         bitsBuffer <<= 1;
@@ -242,7 +242,7 @@ public class Main {
                     break;
             }
 
-            int byteBuffer = inputBuffer[inputBufferIndex++] & 0xFF;
+            int byteBuffer = inputBuffer[inputBufferIndex++];
             int byteBufferLength = BYTE_SIZE;
 
             while (byteBufferLength > 0 && totalBitsDecoded < totalBitsEncoded) {
@@ -251,8 +251,8 @@ public class Main {
                 byteBufferLength--;
 
                 if (current.isLeaf()) {
-                    byte[] bytes = current.value;
-                    for (byte aByte : bytes) {
+                    ByteArrayWrapper bytes = current.value;
+                    for (byte aByte : bytes.getValue()) {
                         outputBuffer[outputBufferIndex++] = aByte;
                         if (outputBufferIndex == BUFFER_SIZE) {
                             bufferedOutputStream.write(outputBuffer, 0, BUFFER_SIZE);
@@ -273,7 +273,7 @@ public class Main {
         PriorityQueue<HuffmanNode> pq = new PriorityQueue<>();
 
         for (Map.Entry<ByteArrayWrapper, Integer> entry : frequencies.entrySet())
-            pq.add(new HuffmanNode(entry.getKey().getData(), entry.getValue()));
+            pq.add(new HuffmanNode(entry.getKey(), entry.getValue()));
 
         while (pq.size() >= 2) {
             HuffmanNode left = pq.poll();
@@ -288,9 +288,9 @@ public class Main {
         return pq.poll();
     }
 
-    private static long generateHuffmanCodes(HuffmanNode huffmanNode, Map<ByteArrayWrapper, String> huffmanCodes, String huffmanCode) {
+    private static long generateHuffmanCodes(HuffmanNode huffmanNode, Map<Integer, String> huffmanCodes, String huffmanCode) {
         if (huffmanNode.isLeaf()) {
-            huffmanCodes.put(new ByteArrayWrapper(huffmanNode.value), huffmanCode);
+            huffmanCodes.put(huffmanNode.value.hashCode(), huffmanCode);
             return (long) huffmanCode.length() * huffmanNode.frequency;
         }
 
