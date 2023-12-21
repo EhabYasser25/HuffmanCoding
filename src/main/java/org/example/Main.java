@@ -35,7 +35,10 @@ public class Main {
         }
     }
 
-    static class HuffmanNode implements Comparable<HuffmanNode> {
+    static class HuffmanNode implements Serializable, Comparable<HuffmanNode> {
+        @Serial
+        private static final long serialVersionUID = 1L;
+
         ByteArrayWrapper value;
         int frequency;
         HuffmanNode left, right;
@@ -52,6 +55,20 @@ public class Main {
         @Override
         public int compareTo(HuffmanNode other) {
             return this.frequency - other.frequency;
+        }
+
+        @Serial
+        private void writeObject(ObjectOutputStream out) throws IOException {
+            out.defaultWriteObject();
+            out.writeObject(left);
+            out.writeObject(right);
+        }
+
+        @Serial
+        private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+            in.defaultReadObject();
+            left = (HuffmanNode) in.readObject();
+            right = (HuffmanNode) in.readObject();
         }
     }
 
@@ -88,13 +105,13 @@ public class Main {
         System.out.println("Reading time " + (time2 - time1) / 1000.0 + " seconds");
 
         HuffmanNode root = buildHuffmanTree(frequencies);
-        Map<Integer, String> huffmanCodes = new HashMap<>();
+        Map<ByteArrayWrapper, String> huffmanCodes = new HashMap<>();
         long totalBitsEncoded = generateHuffmanCodes(root, huffmanCodes, "");
 
         long time3 = System.currentTimeMillis();
         System.out.println("Tree time " + (time3 - time2) / 1000.0 + " seconds");
 
-        writeCompressedFile(filePath, n, frequencies, huffmanCodes, totalBitsEncoded);
+        writeCompressedFile(filePath, n, root, huffmanCodes, totalBitsEncoded);
 
         long time4 = System.currentTimeMillis();
         System.out.println("Writing time " + (time4 - time3) / 1000.0 + " seconds");
@@ -130,13 +147,13 @@ public class Main {
     private static void writeCompressedFile(
             String filePath,
             int n,
-            Map<ByteArrayWrapper, Integer> frequencies,
-            Map<Integer, String> huffmanCodes,
+            HuffmanNode root,
+            Map<ByteArrayWrapper, String> huffmanCodes,
             long totalBitsEncoded) {
         try (BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(filePath + ".hc"));
              ObjectOutputStream objectOutputStream = new ObjectOutputStream(bufferedOutputStream)) {
             objectOutputStream.writeLong(totalBitsEncoded);
-            objectOutputStream.writeObject(frequencies);
+            objectOutputStream.writeObject(root);
 
             writeEncodedData(filePath, n, huffmanCodes, bufferedOutputStream);
         } catch (IOException e) {
@@ -144,7 +161,7 @@ public class Main {
         }
     }
 
-    private static void writeEncodedData(String filePath, int n, Map<Integer, String> huffmanCodes, BufferedOutputStream bufferedOutputStream) throws IOException {
+    private static void writeEncodedData(String filePath, int n, Map<ByteArrayWrapper, String> huffmanCodes, BufferedOutputStream bufferedOutputStream) throws IOException {
         try (BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(filePath))) {
             byte[] buffer = new byte[BUFFER_SIZE];
             byte[] outputBuffer = new byte[BUFFER_SIZE];
@@ -154,7 +171,7 @@ public class Main {
             while ((bytesRead = bufferedInputStream.read(buffer)) != -1) {
                 for (int i = 0; i < bytesRead; i += n) {
                     byte[] key = Arrays.copyOfRange(buffer, i, Math.min(i + n, bytesRead));
-                    String bitCode = huffmanCodes.get(new ByteArrayWrapper(key).hashCode());
+                    String bitCode = huffmanCodes.get(new ByteArrayWrapper(key));
 
                     for (int k = 0; k < bitCode.length(); k++) {
                         bitsBuffer <<= 1;
@@ -221,9 +238,7 @@ public class Main {
             BufferedOutputStream bufferedOutputStream) throws IOException, ClassNotFoundException {
 
         long totalBitsEncoded = objectInputStream.readLong();
-        Map<ByteArrayWrapper, Integer> frequencies = (Map<ByteArrayWrapper, Integer>) objectInputStream.readObject();
-
-        HuffmanNode root = buildHuffmanTree(frequencies);
+        HuffmanNode root = (HuffmanNode) objectInputStream.readObject();
 
         int inputBufferIndex = 0;
         byte[] inputBuffer = new byte[BUFFER_SIZE];
@@ -288,9 +303,9 @@ public class Main {
         return pq.poll();
     }
 
-    private static long generateHuffmanCodes(HuffmanNode huffmanNode, Map<Integer, String> huffmanCodes, String huffmanCode) {
+    private static long generateHuffmanCodes(HuffmanNode huffmanNode, Map<ByteArrayWrapper, String> huffmanCodes, String huffmanCode) {
         if (huffmanNode.isLeaf()) {
-            huffmanCodes.put(huffmanNode.value.hashCode(), huffmanCode);
+            huffmanCodes.put(huffmanNode.value, huffmanCode);
             return (long) huffmanCode.length() * huffmanNode.frequency;
         }
 
