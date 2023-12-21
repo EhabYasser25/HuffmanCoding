@@ -8,8 +8,10 @@ import java.security.NoSuchAlgorithmException;
 public class FileHasher {
 
     public static void main(String[] args) {
-        String filePathGenerated = "D:\\Study\\Semester 5\\Algorithms\\Labs\\Submitted\\Lab 2\\Files\\lecture_uncompressed.pdf";
-        String filePathOutOriginal = "D:\\Study\\Semester 5\\Algorithms\\Labs\\Submitted\\Lab 2\\Files\\lecture.pdf";
+        String filePathGenerated = "D:\\Study\\Semester 5\\Algorithms\\Labs\\Submitted\\Lab 2\\Files\\gbbct10_uncompressed.seq";
+        String filePathOutOriginal = "D:\\Study\\Semester 5\\Algorithms\\Labs\\Submitted\\Lab 2\\Files\\gbbct10.seq";
+//        String filePathGenerated = "D:\\Study\\Semester 5\\Algorithms\\Labs\\Submitted\\Lab 2\\Files\\lecture_uncompressed.pdf";
+//        String filePathOutOriginal = "D:\\Study\\Semester 5\\Algorithms\\Labs\\Submitted\\Lab 2\\Files\\lecture.pdf";
 
         try {
             byte[] fileBytesIn = readFileToByteArray(filePathGenerated);

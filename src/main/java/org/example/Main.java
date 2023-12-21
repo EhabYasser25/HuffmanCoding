@@ -69,15 +69,12 @@ public class Main {
         long time3 = System.currentTimeMillis();
         System.out.println("Tree time " + (time3 - time2) / 1000.0 + " seconds");
 
+        writeCompressedFile(filePath, n, frequencies, huffmanCodes, totalBitsEncoded);
+
         long time4 = System.currentTimeMillis();
-        System.out.println("Encoded length time " + (time4 - time3) / 1000.0 + " seconds");
+        System.out.println("Writing time " + (time4 - time3) / 1000.0 + " seconds");
 
-        writeCompressedFile(filePath, n, huffmanCodes, totalBitsEncoded);
-
-        long time5 = System.currentTimeMillis();
-        System.out.println("Writing time " + (time5 - time4) / 1000.0 + " seconds");
-
-        System.out.println("Compression completed in " + (time5 - time1) / 1000.0 + " seconds");
+        System.out.println("Compression completed in " + (time4 - time1) / 1000.0 + " seconds");
 
         decompress(filePath + ".hc");
     }
@@ -104,13 +101,17 @@ public class Main {
         return frequencies;
     }
 
-    private static void writeCompressedFile(String filePath, int n, Map<String, String> huffmanCodes, long totalBitsEncoded) {
+    private static void writeCompressedFile(
+            String filePath,
+            int n,
+            Map<String, Integer> frequencies,
+            Map<String, String> huffmanCodes,
+            long totalBitsEncoded) {
         try (BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(filePath + ".hc"));
              ObjectOutputStream objectOutputStream = new ObjectOutputStream(bufferedOutputStream)) {
             objectOutputStream.writeLong(totalBitsEncoded);
-            objectOutputStream.writeObject(huffmanCodes);
+            objectOutputStream.writeObject(frequencies);
 
-            long time
             writeEncodedData(filePath, n, huffmanCodes, bufferedOutputStream);
         } catch (IOException e) {
             System.err.println("Error writing the compressed file: " + e.getMessage());
@@ -120,46 +121,46 @@ public class Main {
     private static void writeEncodedData(String filePath, int n, Map<String, String> huffmanCodes, BufferedOutputStream bufferedOutputStream) throws IOException {
         try (BufferedInputStream bufferedInputStream = new BufferedInputStream(new FileInputStream(filePath))) {
             byte[] buffer = new byte[BUFFER_SIZE];
-            int bytesRead;
-            int bitsBuffer = 0;
-            int bitsBufferLength = 0;
+            byte[] outputBuffer = new byte[BUFFER_SIZE];
+            int bytesRead, outputIndex = 0;
+            int bitsBuffer = 0, bitsBufferLength = 0;
+
             while ((bytesRead = bufferedInputStream.read(buffer)) != -1) {
                 for (int i = 0; i < bytesRead; i += n) {
-                    String key = new String(buffer, i, Math.min(n, bytesRead - i), StandardCharsets.ISO_8859_1);
+                    int end = Math.min(i + n, bytesRead);
+                    String key = new String(buffer, i, end - i, StandardCharsets.ISO_8859_1);
                     String bitCode = huffmanCodes.get(key);
-                    for (char bit : bitCode.toCharArray()) {
+
+                    for (int k = 0; k < bitCode.length(); k++) {
                         bitsBuffer <<= 1;
-                        if (bit == '1')
+                        if (bitCode.charAt(k) == '1') {
                             bitsBuffer |= 1;
+                        }
+
                         bitsBufferLength++;
                         if (bitsBufferLength == 8) {
-                            bufferedOutputStream.write(bitsBuffer);
+                            outputBuffer[outputIndex++] = (byte) bitsBuffer;
+                            if (outputIndex == outputBuffer.length) {
+                                bufferedOutputStream.write(outputBuffer, 0, outputIndex);
+                                outputIndex = 0;
+                            }
                             bitsBuffer = 0;
                             bitsBufferLength = 0;
                         }
                     }
                 }
             }
+
+            // Handle any remaining bits
             if (bitsBufferLength > 0) {
                 bitsBuffer <<= (8 - bitsBufferLength);
-                bufferedOutputStream.write(bitsBuffer);
+                outputBuffer[outputIndex++] = (byte) bitsBuffer;
             }
-            bufferedOutputStream.flush();
-        }
-    }
 
-    private static long calculateTotalEncodedLength(Map<String, Integer> frequencies, Map<String, String> huffmanCodes) {
-        long totalLength = 0;
-        for (Map.Entry<String, Integer> entry : frequencies.entrySet()) {
-            String key = entry.getKey();
-            Integer frequency = entry.getValue();
-            String huffmanCode = huffmanCodes.get(key);
-
-            if (huffmanCode != null) {
-                totalLength += (long) frequency * huffmanCode.length();
-            }
+            // Write any remaining data in output buffer to the stream
+            if (outputIndex > 0)
+                bufferedOutputStream.write(outputBuffer, 0, outputIndex);
         }
-        return totalLength;
     }
 
     private static void decompress(String compressedFilePath) {
@@ -197,7 +198,7 @@ public class Main {
             ObjectInputStream objectInputStream,
             BufferedOutputStream bufferedOutputStream) throws IOException, ClassNotFoundException {
 
-        long totalEncodedLength = objectInputStream.readLong();
+        long totalBitsEncoded = objectInputStream.readLong();
         Map<String, Integer> frequencies = (Map<String, Integer>) objectInputStream.readObject();
 
         HuffmanNode root = buildHuffmanTree(frequencies);
@@ -207,11 +208,11 @@ public class Main {
         int bytesRead = bufferedInputStream.read(inputBuffer, 0, BUFFER_SIZE);
 
         HuffmanNode current = root;
-        long bitsProcessed = 0;
+        long totalBitsDecoded = 0;
         int outputBufferIndex = 0;
         byte[] outputBuffer = new byte[BUFFER_SIZE];
 
-        while (bitsProcessed < totalEncodedLength) {
+        while (totalBitsDecoded < totalBitsEncoded) {
             if (inputBufferIndex >= bytesRead) {
                 bytesRead = bufferedInputStream.read(inputBuffer, 0, BUFFER_SIZE);
                 inputBufferIndex = 0;
@@ -219,10 +220,10 @@ public class Main {
                     break;
             }
 
-            int byteBuffer = inputBuffer[inputBufferIndex++];
+            int byteBuffer = inputBuffer[inputBufferIndex++] & 0xFF;
             int byteBufferLength = BYTE_SIZE;
 
-            while (byteBufferLength > 0 && bitsProcessed < totalEncodedLength) {
+            while (byteBufferLength > 0 && totalBitsDecoded < totalBitsEncoded) {
                 current = ((byteBuffer & LEFTMOST_BIT_MASK) == 0) ? current.left : current.right;
                 byteBuffer <<= 1;
                 byteBufferLength--;
@@ -238,7 +239,7 @@ public class Main {
                     }
                     current = root;
                 }
-                bitsProcessed++;
+                totalBitsDecoded++;
             }
         }
 
@@ -269,7 +270,7 @@ public class Main {
     private static long generateHuffmanCodes(HuffmanNode huffmanNode, Map<String, String> huffmanCodes, String huffmanCode) {
         if (huffmanNode.isLeaf()) {
             huffmanCodes.put(huffmanNode.value, huffmanCode);
-            return (long) huffmanNode.value.length() * huffmanNode.frequency;
+            return (long) huffmanCode.length() * huffmanNode.frequency;
         }
 
         long leftBits = generateHuffmanCodes(huffmanNode.left, huffmanCodes, huffmanCode + "0");
