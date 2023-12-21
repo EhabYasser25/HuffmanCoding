@@ -205,7 +205,7 @@ public class Main {
 
         int inputBufferIndex = 0;
         byte[] inputBuffer = new byte[BUFFER_SIZE];
-        int bytesRead = bufferedInputStream.read(inputBuffer, 0, BUFFER_SIZE);
+        int bytesRead = bufferedInputStream.read(inputBuffer);
 
         HuffmanNode current = root;
         long totalBitsDecoded = 0;
@@ -214,7 +214,7 @@ public class Main {
 
         while (totalBitsDecoded < totalBitsEncoded) {
             if (inputBufferIndex >= bytesRead) {
-                bytesRead = bufferedInputStream.read(inputBuffer, 0, BUFFER_SIZE);
+                bytesRead = bufferedInputStream.read(inputBuffer);
                 inputBufferIndex = 0;
                 if (bytesRead == -1)
                     break;
@@ -245,7 +245,6 @@ public class Main {
 
         if (outputBufferIndex > 0)
             bufferedOutputStream.write(outputBuffer, 0, outputBufferIndex);
-        bufferedOutputStream.flush();
     }
 
     private static HuffmanNode buildHuffmanTree(Map<String, Integer> frequencies) {
@@ -273,9 +272,9 @@ public class Main {
             return (long) huffmanCode.length() * huffmanNode.frequency;
         }
 
-        long leftBits = generateHuffmanCodes(huffmanNode.left, huffmanCodes, huffmanCode + "0");
-        long rightBits = generateHuffmanCodes(huffmanNode.right, huffmanCodes, huffmanCode + "1");
-        return leftBits + rightBits;
+        long leftBitsCount = generateHuffmanCodes(huffmanNode.left, huffmanCodes, huffmanCode + "0");
+        long rightBitsCount = generateHuffmanCodes(huffmanNode.right, huffmanCodes, huffmanCode + "1");
+        return leftBitsCount + rightBitsCount;
     }
 
 }
